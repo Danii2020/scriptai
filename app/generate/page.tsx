@@ -61,7 +61,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#0a0a23] to-[#1a1a2e] text-white p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center text-white p-6">
       <div className="w-full max-w-xl bg-[#181828]/80 rounded-2xl shadow-xl p-8 flex flex-col gap-8">
         <h2 className="text-3xl font-bold text-center mb-2">Generate Your YouTube Script</h2>
         <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
@@ -69,7 +69,7 @@ export default function GeneratePage() {
             <span className="font-medium">Video Idea</span>
             <input
               type="text"
-              className="rounded-lg px-4 py-3 bg-[#23233a] text-white placeholder:text-[#b0b0b0] focus:outline-none focus:ring-2 focus:ring-[#00c3ff]"
+              className="rounded-lg px-4 py-3 bg-[#23233a] text-white placeholder:text-[#b0b0b0] focus:outline-none focus:ring-2 focus:ring-[#636768]"
               placeholder="Describe your video idea..."
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
@@ -97,7 +97,7 @@ export default function GeneratePage() {
                   type="button"
                   key={tone.value}
                   className={`px-4 py-2 rounded-full font-semibold border-2 transition-colors cursor-pointer ${tones.includes(tone.value)
-                    ? "bg-gradient-to-r from-[#00c3ff] to-[#ffff1c] text-black border-transparent"
+                    ? "bg-gradient-theme border-transparent"
                     : "bg-[#23233a] text-white border-[#333] hover:bg-[#2d2d4d]"}
                   `}
                   onClick={() => handleToneToggle(tone.value)}
@@ -109,7 +109,7 @@ export default function GeneratePage() {
           </div>
           <button
             type="submit"
-            className="mt-4 bg-gradient-to-r from-[#00c3ff] to-[#ffff1c] text-black font-bold px-8 py-3 rounded-full shadow-lg text-lg hover:scale-105 transition-transform cursor-pointer"
+            className="mt-4 bg-gradient-theme text-white font-bold px-8 py-3 rounded-full shadow-lg text-lg hover:scale-105 transition-transform cursor-pointer"
             disabled={loading}
           >
             {loading ? "Generating..." : "Generate Script"}
