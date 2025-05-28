@@ -1,7 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FaUpload } from "react-icons/fa";
 import axios from "axios";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 const TONES = [
   { label: "Educational", value: "educational" },
@@ -10,6 +12,18 @@ const TONES = [
   { label: "Casual", value: "casual" },
 ];
 
+const LOADING_MESSAGES = [
+  "Cooking up your script...",
+  "Researching the best content...",
+  "Writing the perfect script...",
+  "Adding some creative flair...",
+  "Polishing the final touches...",
+  "Making it engaging and fun...",
+  "Almost there...",
+];
+
+const URL = "http://127.0.0.1:8000"
+
 export default function GeneratePage() {
   const [idea, setIdea] = useState("");
   const [template, setTemplate] = useState<File | null>(null);
@@ -17,6 +31,52 @@ export default function GeneratePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentLoadingMessage, setCurrentLoadingMessage] = useState("");
+  const [taskId, setTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let messageInterval: NodeJS.Timeout;
+    if (loading) {
+      let messageIndex = 0;
+      setCurrentLoadingMessage(LOADING_MESSAGES[0]);
+      messageInterval = setInterval(() => {
+        messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
+        setCurrentLoadingMessage(LOADING_MESSAGES[messageIndex]);
+      }, 3000);
+    }
+    return () => {
+      if (messageInterval) clearInterval(messageInterval);
+    };
+  }, [loading]);
+
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    
+    const pollTask = async () => {
+      if (!taskId) return;
+      
+      try {
+        const response = await axios.get(`${URL}/task/${taskId}`);
+        const { status, result: taskResult } = response.data;
+        
+        if (status === "completed" && taskResult) {
+          setResult(taskResult);
+          setLoading(false);
+          setTaskId(null);
+        }
+      } catch (err) {
+        console.error("Error polling task:", err);
+      }
+    };
+
+    if (taskId) {
+      pollInterval = setInterval(pollTask, 2000);
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [taskId]);
 
   function handleToneToggle(tone: string) {
     setTones((prev) =>
@@ -35,18 +95,25 @@ export default function GeneratePage() {
     setLoading(true);
     setResult(null);
     setError(null);
+    setTaskId(null);
+
     try {
-      const formData = new FormData();
-      formData.append("idea", idea);
-      formData.append("tones", JSON.stringify(tones));
-      if (template) {
-        formData.append("template", template);
-      }
-      // Placeholder API endpoint
-      const response = await axios.post("/api/generate-script", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      const formData = {"topic": idea, "tones": tones}
+    //   formData.append("topic", idea);
+    //   formData.append("tones", JSON.stringify(tones));
+    //   if (template) {
+    //     formData.append("template", template);
+    //   }
+      console.log(formData)
+      const response = await axios.post(`${URL}/generate-script`, formData, {
+        headers: { "Content-Type": "application/json" },
       });
-      setResult(response.data.script || "No script returned.");
+
+      if (response.data.task_id) {
+        setTaskId(response.data.task_id);
+      } else {
+        throw new Error("No task ID received");
+      }
     } catch (err: unknown) {
       let message = "Something went wrong.";
       if (axios.isAxiosError(err) && err.response) {
@@ -55,7 +122,6 @@ export default function GeneratePage() {
         message = err.message;
       }
       setError(message);
-    } finally {
       setLoading(false);
     }
   }
@@ -69,7 +135,7 @@ export default function GeneratePage() {
             <span className="font-medium">Video Idea</span>
             <input
               type="text"
-              className="rounded-lg px-4 py-3 bg-[#23233a] text-white placeholder:text-[#b0b0b0] focus:outline-none focus:ring-2 focus:ring-[#636768]"
+              className="rounded-lg px-4 py-3 bg-[#23233a] text-white placeholder:text-[#b0b0b0] focus:outline-none focus:ring-2 focus:ring-[#00c3ff]"
               placeholder="Describe your video idea..."
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
@@ -97,7 +163,7 @@ export default function GeneratePage() {
                   type="button"
                   key={tone.value}
                   className={`px-4 py-2 rounded-full font-semibold border-2 transition-colors cursor-pointer ${tones.includes(tone.value)
-                    ? "bg-gradient-theme border-transparent"
+                    ? "bg-gradient-to-r from-[#00c3ff] to-[#ffff1c] text-black border-transparent"
                     : "bg-[#23233a] text-white border-[#333] hover:bg-[#2d2d4d]"}
                   `}
                   onClick={() => handleToneToggle(tone.value)}
@@ -109,17 +175,28 @@ export default function GeneratePage() {
           </div>
           <button
             type="submit"
-            className="mt-4 bg-gradient-theme text-white font-bold px-8 py-3 rounded-full shadow-lg text-lg hover:scale-105 transition-transform cursor-pointer"
+            className="mt-4 bg-gradient-to-r bg-gradient-theme text-white font-bold px-8 py-3 rounded-full shadow-lg text-lg hover:scale-105 transition-transform cursor-pointer"
             disabled={loading}
           >
             {loading ? "Generating..." : "Generate Script"}
           </button>
         </form>
         {error && <div className="text-red-400 text-center mt-2">{error}</div>}
+        {loading && (
+          <div className="mt-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00c3ff] mx-auto mb-4"></div>
+            <p className="text-lg font-medium text-[#00c3ff]">{currentLoadingMessage}</p>
+          </div>
+        )}
         {result && (
           <div className="mt-6 bg-[#23233a] rounded-lg p-6 text-white whitespace-pre-line shadow-inner">
             <h3 className="text-xl font-bold mb-2">Generated Script</h3>
-            <div>{result}</div>
+            <div 
+              className="markdown-body"
+              dangerouslySetInnerHTML={{ 
+                __html: DOMPurify.sanitize(marked.parse(result, { async: false })) 
+              }} 
+            />
           </div>
         )}
       </div>
