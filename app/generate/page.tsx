@@ -1,28 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { FaUpload, FaCopy, FaCheck } from "react-icons/fa";
+import ToneSelector from "./components/ToneSelector";
+import FileUpload from "./components/FileUpload";
+import LoadingIndicator from "./components/LoadingIndicator";
+import ScriptResult from "./components/ScriptResult";
+import ErrorMessage from "./components/ErrorMessage";
+import { TONES, LOADING_MESSAGES } from "./utils/constants";
+import { generateScript, pollTask, downloadScript } from "./utils/api";
 import axios from "axios";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-
-const TONES = [
-  { label: "Educational", value: "educational" },
-  { label: "Funny", value: "funny" },
-  { label: "Entertained", value: "entertained" },
-  { label: "Casual", value: "casual" },
-];
-
-const LOADING_MESSAGES = [
-  "Cooking up your script...",
-  "Researching the best content...",
-  "Writing the perfect script...",
-  "Adding some creative flair...",
-  "Polishing the final touches...",
-  "Making it engaging and fun...",
-  "Almost there...",
-];
-
-const URL = "http://127.0.0.1:8000"
 
 export default function GeneratePage() {
   const [idea, setIdea] = useState("");
@@ -53,13 +38,11 @@ export default function GeneratePage() {
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
 
-    const pollTask = async () => {
+    const poll = async () => {
       if (!taskId) return;
-
       try {
-        const response = await axios.get(`${URL}/task/${taskId}`);
+        const response = await pollTask(taskId);
         const { status, result: taskResult } = response.data;
-
         if (status === "completed" && taskResult) {
           setResult(taskResult);
           setLoading(false);
@@ -69,14 +52,13 @@ export default function GeneratePage() {
       }
     };
 
-    if (taskId) {
-      pollInterval = setInterval(pollTask, 2000);
+    if (taskId && loading) {
+      pollInterval = setInterval(poll, 2000);
     }
-
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [taskId]);
+  }, [taskId, loading]);
 
   function handleToneToggle(tone: string) {
     setTones((prev) =>
@@ -98,16 +80,13 @@ export default function GeneratePage() {
     setTaskId(null);
 
     try {
-      const formData = { "topic": idea, "tones": tones, "file_name": template }
-      //   formData.append("topic", idea);
-      //   formData.append("tones", JSON.stringify(tones));
-      //   if (template) {
-      //     formData.append("template", template);
-      //   }
-      const response = await axios.post(`${URL}/generate-script`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
+      const formData = new FormData();
+      formData.append("topic", idea);
+      formData.append("tones", JSON.stringify(tones));
+      if (template) {
+        formData.append("template", template);
+      }
+      const response = await generateScript(formData);
       if (response.data.task_id) {
         setTaskId(response.data.task_id);
       } else {
@@ -137,6 +116,43 @@ export default function GeneratePage() {
     }
   };
 
+  const handleDownload = async () => {
+    if (!taskId) return;
+    try {
+      const response = await downloadScript(taskId);
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'generated-script.docx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading script:', err);
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 404) {
+          alert('Script file not found. Please try generating the script again.');
+        } else if (err.response?.status === 400) {
+          alert('Script is not ready for download yet. Please wait.');
+        } else {
+          alert('Error downloading the script. Please try again.');
+        }
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-white p-6">
       <div className="w-full max-w-xl bg-[#181828]/80 rounded-2xl shadow-xl p-8 flex flex-col gap-8">
@@ -155,86 +171,11 @@ export default function GeneratePage() {
           </label>
           <div className="flex flex-col gap-2">
             <span className="font-medium">Attach Script Template (optional)</span>
-            <label className="flex items-center gap-3 cursor-pointer bg-[#23233a] px-4 py-2 rounded-lg hover:bg-[#2d2d4d] transition-colors">
-              <FaUpload className="text-[#00c3ff]" />
-              <span>{template ? template.name : "Upload .txt or .docx file"}</span>
-              <input
-                type="file"
-                accept=".doc,.docx"
-                className="hidden"
-                onChange={handleTemplateChange}
-              />
-            </label>
+            <FileUpload template={template} onChange={handleTemplateChange} />
           </div>
           <div className="flex flex-col gap-2">
             <span className="font-medium">Select Tone(s)</span>
-            <div className="flex flex-wrap gap-3">
-              {TONES.map((tone) => (
-                <button
-                  type="button"
-                  key={tone.value}
-                  className={`px-4 py-2 rounded-full font-semibold border-2 transition-colors cursor-pointer ${tones.includes(tone.value)
-                    ? "bg-gradient-to-r from-[#00c3ff] to-[#ffff1c] text-black border-transparent"
-                    : "bg-[#23233a] text-white border-[#333] hover:bg-[#2d2d4d]"}
-                  `}
-                  onClick={() => handleToneToggle(tone.value)}
-                >
-                  {tone.label}
-                </button>
-              ))}
-            </div>
-            {
-              result && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const response = await axios.get(`${URL}/download-script/${taskId}`, {
-                        responseType: 'blob'
-                      });
-
-                      // Get filename from Content-Disposition header if available
-                      const contentDisposition = response.headers['content-disposition'];
-                      let filename = 'generated-script.docx';
-                      if (contentDisposition) {
-                        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-                        if (filenameMatch) {
-                          filename = filenameMatch[1];
-                        }
-                      }
-
-                      // Create blob URL and trigger download
-                      const blob = new Blob([response.data], {
-                        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                      });
-                      const url = window.URL.createObjectURL(blob);
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.setAttribute('download', filename);
-                      document.body.appendChild(link);
-                      link.click();
-                      link.remove();
-                      window.URL.revokeObjectURL(url);
-                    } catch (err) {
-                      console.error('Error downloading script:', err);
-                      if (axios.isAxiosError(err)) {
-                        if (err.response?.status === 404) {
-                          alert('Script file not found. Please try generating the script again.');
-                        } else if (err.response?.status === 400) {
-                          alert('Script is not ready for download yet. Please wait.');
-                        } else {
-                          alert('Error downloading the script. Please try again.');
-                        }
-                      }
-                    }
-                  }}
-                  className="mt-4 bg-gradient-to-r bg-gradient-theme text-white font-bold px-8 py-3 rounded-full shadow-lg text-lg hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Download Script
-                </button>
-              )
-            }
-
+            <ToneSelector tones={tones} onToggleTone={handleToneToggle} availableTones={TONES} />
           </div>
           <button
             type="submit"
@@ -244,43 +185,15 @@ export default function GeneratePage() {
             {loading ? "Generating..." : "Generate Script"}
           </button>
         </form>
-        {error && <div className="text-red-400 text-center mt-2">{error}</div>}
-        {loading && (
-          <div className="mt-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00c3ff] mx-auto mb-4"></div>
-            <p className="text-lg font-medium text-[#00c3ff]">{currentLoadingMessage}</p>
-          </div>
-        )}
+        <ErrorMessage error={error} />
+        {loading && <LoadingIndicator message={currentLoadingMessage} />}
         {result && (
-          <div className="mt-6 bg-[#23233a] rounded-lg p-6 text-white whitespace-pre-line shadow-inner">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Generated Script</h3>
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2d2d4d] hover:bg-[#3d3d5d]
-                transition-colors cursor-pointer"
-                title="Copy to clipboard"
-              >
-                {copySuccess ? (
-                  <>
-                    <FaCheck className="text-green-400" />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <FaCopy />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-            </div>
-            <div
-              className="markdown-body"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(marked.parse(result, { async: false }))
-              }}
-            />
-          </div>
+          <ScriptResult
+            result={result}
+            onCopy={handleCopy}
+            copySuccess={copySuccess}
+            onDownload={handleDownload}
+          />
         )}
       </div>
     </div>
