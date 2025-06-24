@@ -15,4 +15,4 @@ export const LOADING_MESSAGES = [
   "Almost there...",
 ];
 
-export const URL = "http://127.0.0.1:8000"; 
+export const URL = process.env.NEXT_PUBLIC_AGENTS_API_URL;
