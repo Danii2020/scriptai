@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next"
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import Adsense from "./generate/components/AdSense";
 import "./globals.css";
 
