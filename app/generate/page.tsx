@@ -8,12 +8,14 @@ import ErrorMessage from "./components/ErrorMessage";
 import { TONES, LOADING_MESSAGES } from "./utils/constants";
 import { generateScript, pollTask, downloadScript } from "./utils/api";
 import axios from "axios";
+import PlatformDropdown from "./components/PlatformDropdown";
 
 export default function GeneratePage() {
   const [idea, setIdea] = useState("");
   const [template, setTemplate] = useState<File | null>(null);
   const [tones, setTones] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [platform, setPlatform] = useState<string>("YouTube");
+  const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentLoadingMessage, setCurrentLoadingMessage] = useState("");
@@ -83,6 +85,7 @@ export default function GeneratePage() {
       const formData = new FormData();
       formData.append("topic", idea);
       formData.append("tones", JSON.stringify(tones));
+      formData.append("platform", platform);
       if (template) {
         formData.append("template", template);
       }
@@ -176,6 +179,9 @@ export default function GeneratePage() {
           <div className="flex flex-col gap-2">
             <span className="font-medium">Select Tone(s)</span>
             <ToneSelector tones={tones} onToggleTone={handleToneToggle} availableTones={TONES} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <PlatformDropdown value={platform} onChange={setPlatform} />
           </div>
           <button
             type="submit"
