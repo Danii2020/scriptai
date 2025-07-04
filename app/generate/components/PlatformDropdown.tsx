@@ -1,12 +1,17 @@
 import React from "react";
 
 const platforms = [
-  { label: "YouTube", value: "YouTube" },
-  { label: "TikTok", value: "TikTok" },
-  { label: "Instagram", value: "Instagram" },
+  { label: "YouTube", value: "youtube" },
+  { label: "TikTok", value: "tiktok" },
+  { label: "Instagram", value: "instagram" },
 ];
 
-export default function PlatformDropdown({ value, onChange }) {
+type PlatformDropdownProps = {
+  value: string;
+  onChange: (value: string) => void;
+};
+
+export default function PlatformDropdown({ value, onChange }: PlatformDropdownProps) {
   return (
     <label className="flex flex-col gap-2">
       <span className="font-medium">Select Platform</span>

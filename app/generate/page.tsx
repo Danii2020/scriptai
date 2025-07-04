@@ -30,7 +30,7 @@ export default function GeneratePage() {
       messageInterval = setInterval(() => {
         messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
         setCurrentLoadingMessage(LOADING_MESSAGES[messageIndex]);
-      }, 3000);
+      }, 10000);
     }
     return () => {
       if (messageInterval) clearInterval(messageInterval);
@@ -159,7 +159,7 @@ export default function GeneratePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-white p-6">
       <div className="w-full max-w-xl bg-[#181828]/80 rounded-2xl shadow-xl p-8 flex flex-col gap-8">
-        <h2 className="text-3xl font-bold text-center mb-2">Generate Your YouTube Script</h2>
+        <h2 className="text-3xl font-bold text-center mb-2">Generate Your Video Script for YouTube, TikTok, or Instagram</h2>
         <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-2">
             <span className="font-medium">Video Idea</span>
