@@ -157,8 +157,8 @@ export default function GeneratePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center text-white p-6">
-      <div className="w-full max-w-xl bg-[#181828]/80 rounded-2xl shadow-xl p-2 flex flex-col gap-8">
+    <div className="min-h-screen flex flex-col items-center justify-center text-white md:p-6 p-4">
+      <div className="w-full max-w-xl bg-[#181828]/80 rounded-2xl shadow-xl md:p-8 p-4 flex flex-col gap-8">
         <h2 className="text-3xl font-bold text-center mb-2">Generate Your Video Script for YouTube, TikTok, or Instagram</h2>
         <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-2">
