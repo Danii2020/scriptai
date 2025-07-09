@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-white p-6">
       <header className="flex flex-col items-center gap-4 mb-12">
-        <Image src="/favicon.ico" alt="ScriptAI Logo" width={48} height={48} />
+        <Image src="/icon.ico" alt="ScriptAI Logo" width={48} height={48} />
         <h1 className="text-4xl sm:text-5xl font-bold text-center">
           Welcome to <span className="bg-font-gradient-theme">Scriptioo</span>
         </h1>
