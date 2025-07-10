@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Scriptioo",
+    title: "Scriptioo - Free AI Video Script Generator",
     description: "Effortlessly generate engaging, long-form or short-form video scripts.",
 };
 
