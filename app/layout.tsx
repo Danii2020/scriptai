@@ -27,7 +27,7 @@ export default function RootLayout({
     return (
         <html lang="en">
             <head>
-                <Adsense pId="7834926758816724"/>
+                <Adsense pId={process.env.NEXT_PUB_ID || ""}/>
             </head>
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-br from-[#2f2f32] to-[#1a1a2e]`}

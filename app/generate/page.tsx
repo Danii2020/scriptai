@@ -9,6 +9,7 @@ import { TONES, LOADING_MESSAGES } from "./utils/constants";
 import { generateScript, pollTask, downloadScript } from "./utils/api";
 import axios from "axios";
 import PlatformDropdown from "./components/PlatformDropdown";
+import AdBanner from "./components/AdBanner";
 
 export default function GeneratePage() {
   const [idea, setIdea] = useState("");
@@ -193,6 +194,7 @@ export default function GeneratePage() {
         </form>
         <ErrorMessage error={error} />
         {loading && <LoadingIndicator message={currentLoadingMessage} />}
+        <AdBanner dataAdFormat="auto" dataFullWidthResponsive={true} dataAdSlot={process.env.NEXT_AD_ID || ""}/>
         {result && (
           <ScriptResult
             result={result}
