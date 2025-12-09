@@ -6,7 +6,7 @@ import LoadingIndicator from "./components/LoadingIndicator";
 import ScriptResult from "./components/ScriptResult";
 import ErrorMessage from "./components/ErrorMessage";
 import { TONES, LOADING_MESSAGES } from "./utils/constants";
-import { generateScript, pollTask, downloadScript } from "./utils/api";
+import { downloadScript, generateScript } from "./utils/api";
 import axios from "axios";
 import PlatformDropdown from "./components/PlatformDropdown";
 import AdBanner from "./components/AdBanner";
@@ -21,6 +21,7 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentLoadingMessage, setCurrentLoadingMessage] = useState("");
   const [taskId, setTaskId] = useState<string | null>(null);
+  const [filePath, setFilePath] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
@@ -39,28 +40,8 @@ export default function GeneratePage() {
   }, [loading]);
 
   useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-
-    const poll = async () => {
-      if (!taskId) return;
-      try {
-        const response = await pollTask(taskId);
-        const { status, result: taskResult } = response.data;
-        if (status === "completed" && taskResult) {
-          setResult(taskResult);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error polling task:", err);
-      }
-    };
-
-    if (taskId && loading) {
-      pollInterval = setInterval(poll, 2000);
-    }
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
+    // Polling removed: streaming handled directly in submit handler.
+    return () => {};
   }, [taskId, loading]);
 
   function handleToneToggle(tone: string) {
@@ -81,20 +62,144 @@ export default function GeneratePage() {
     setResult(null);
     setError(null);
     setTaskId(null);
+    setFilePath(null);
 
     try {
       const formData = new FormData();
       formData.append("topic", idea);
-      formData.append("tones", JSON.stringify(tones));
+      // FastAPI expects List[str] for tones, so send each tone separately
+      // If no tones selected, FastAPI will default to ["professional"]
+      if (tones.length > 0) {
+        tones.forEach(tone => {
+          formData.append("tones", tone);
+        });
+      }
       formData.append("platform", platform);
       if (template) {
-        formData.append("template", template);
+        formData.append("file_name", template);
       }
-      const response = await generateScript(formData);
-      if (response.data.task_id) {
-        setTaskId(response.data.task_id);
-      } else {
-        throw new Error("No task ID received");
+      // Stream response chunks via fetch + getReader()
+      let buffer = "";
+
+      // Helper function to handle parsed events
+      const handleEvent = (event: {
+        status?: string;
+        research_results?: string;
+        final_script?: string;
+        file_path?: string;
+        task_id?: string;
+        error?: string;
+        message?: string;
+        type?: string;
+        text?: string;
+      }) => {
+        console.log("Handling event:", event);
+        
+        // Handle backend event structure: status, research_results, final_script, file_path
+        if (event.status === "research_completed" && event.research_results) {
+          // Research phase completed - could show this as progress
+          console.log("Research completed");
+        } else if (event.status === "completed" && event.final_script) {
+          // Final script received - set it directly (not append)
+          setResult(event.final_script);
+          if (event.file_path) {
+            // Store the full file_path
+            setFilePath(event.file_path);
+            
+            // Extract task_id (UUID) from file_path
+            // The file_path format: /var/folders/.../script_<uuid>.docx
+            const pathParts = event.file_path.split('/');
+            const fileName = pathParts[pathParts.length - 1];
+            
+            // Extract UUID from filename (script_<uuid>.docx)
+            const uuidMatch = fileName.match(/script_([a-f0-9-]+)\.docx/);
+            if (uuidMatch && uuidMatch[1]) {
+              setTaskId(uuidMatch[1]);
+            } else {
+              // Fallback: try to extract any UUID-like pattern from the path
+              const uuidPattern = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i;
+              const uuidFromPath = event.file_path.match(uuidPattern);
+              if (uuidFromPath && uuidFromPath[1]) {
+                setTaskId(uuidFromPath[1]);
+              }
+            }
+          }
+          // Also check if task_id is provided directly
+          if (event.task_id) {
+            setTaskId(event.task_id);
+          }
+          setLoading(false);
+        } else if (event.status === "error" || event.error) {
+          setError(event.message || event.error || "An error occurred during generation.");
+          setLoading(false);
+        } else if (event.type === "chunk" && typeof event.text === "string") {
+          // Legacy format support: chunk events - append text
+          setResult((prev) => (prev || "") + event.text);
+        } else if (event.type === "done") {
+          // Legacy format support: done events
+          if (event.task_id) setTaskId(event.task_id);
+          setLoading(false);
+        } else if (event.text) {
+          // Fallback: if there's a text field, append it
+          setResult((prev) => (prev || "") + event.text);
+        }
+      };
+
+      const processBuffer = () => {
+        // Process complete SSE events (separated by \n\n)
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary !== -1) {
+          const rawEvent = buffer.slice(0, boundary).trim();
+          buffer = buffer.slice(boundary + 2);
+
+          if (!rawEvent) {
+            boundary = buffer.indexOf("\n\n");
+            continue;
+          }
+
+          // Try to parse as SSE format first: "data: {...}"
+          const lines = rawEvent.split(/\r?\n/);
+          let parsed = false;
+          
+          for (const line of lines) {
+            if (line.startsWith("data:")) {
+              const payload = line.replace(/^data:\s*/, "").trim();
+              if (!payload) continue;
+              
+              try {
+                const event = JSON.parse(payload);
+                handleEvent(event);
+                parsed = true;
+              } catch (err) {
+                console.error("Failed to parse SSE payload:", err, "Payload:", payload);
+              }
+            }
+          }
+          
+          // Fallback: Try parsing as raw JSON object (in case backend sends without "data:" prefix)
+          if (!parsed && rawEvent.trim().startsWith("{")) {
+            try {
+              const event = JSON.parse(rawEvent);
+              handleEvent(event);
+            } catch (err) {
+              console.error("Failed to parse raw JSON:", err, "Raw event:", rawEvent);
+            }
+          }
+
+          boundary = buffer.indexOf("\n\n");
+        }
+      };
+
+      const onChunk = (chunk: string) => {
+        buffer += chunk;
+        processBuffer();
+      };
+
+      await generateScript(formData, onChunk);
+
+      // Process any remaining buffer after streaming completes
+      if (buffer.trim()) {
+        processBuffer();
       }
     } catch (err: unknown) {
       let message = "Something went wrong.";
@@ -121,9 +226,14 @@ export default function GeneratePage() {
   };
 
   const handleDownload = async () => {
-    if (!taskId) return;
+    if (!filePath) {
+      alert('File information not available. Please generate the script again.');
+      return;
+    }
+    
     try {
-      const response = await downloadScript(taskId);
+      console.log('Downloading script with file_path:', filePath);
+      const response = await downloadScript(filePath);
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'generated-script.docx';
       if (contentDisposition) {
